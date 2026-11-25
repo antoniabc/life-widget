@@ -1,0 +1,9 @@
+# Dane prywatne i logowanie Google
+credentials.json
+token.json
+config.json
+data/
+import-*/
+backup-*/
+__pycache__/
+*.pyc

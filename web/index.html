@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="pl" data-skin="lavender">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#eee9f5">
+  <meta name="referrer" content="no-referrer">
+  <title>Life Widget</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main class="widget">
+    <header class="top">
+      <button class="soft icon" id="settings" type="button" aria-label="Zmień wygląd" title="Zmień wygląd">☰</button>
+      <h1>Life</h1>
+      <button class="soft icon" id="options" type="button" aria-label="Opcje zadania" title="Opcje zadania" disabled>···</button>
+    </header>
+    <form id="pair" class="panel" hidden>
+      <h2>Połącz z Life</h2>
+      <label>Kod dostępu <input name="key" required autocapitalize="off" spellcheck="false" autocomplete="off"></label>
+      <button class="soft" type="submit">Połącz</button>
+    </form>
+    <p id="connection" class="notice" role="status" hidden></p>
+    <section id="focus" class="focus" aria-label="Zegar" hidden>
+      <div class="camp-scene" aria-hidden="true"></div>
+      <button id="task-name" type="button" class="task-name"></button>
+      <div class="dial">
+        <div class="dial-track"><div id="arc"></div></div>
+        <div class="dial-face">
+          <button id="category" class="category" type="button"></button>
+          <output id="elapsed" aria-live="off">00:00:00</output>
+          <span id="status"></span>
+          <span id="plan"></span>
+        </div>
+      </div>
+      <div class="actions">
+        <button class="soft icon" data-page="tasks" type="button" aria-label="Zadania" title="Zadania">☷</button>
+        <button class="soft icon main-action" id="toggle" type="button" aria-label="Start" title="Start">▶</button>
+        <button class="soft icon" id="complete" type="button" aria-label="Zalicz zadanie" title="Zalicz zadanie">✓</button>
+      </div>
+      <div class="daily">
+        <div><span id="daily-time"></span><span id="daily-goal"></span></div>
+        <div class="meter" id="daily-meter" role="progressbar" aria-label="Cel dzienny" aria-valuemin="0" aria-valuemax="100"></div>
+      </div>
+    </section>
+    <section id="tasks" class="panel" hidden><h2>Zadania</h2><ul class="entries" id="task-list"></ul></section>
+    <section id="history" class="panel" hidden><h2>Historia</h2><ul class="entries" id="history-list"></ul></section>
+    <section id="chart" class="panel" hidden>
+      <h2>Wykres</h2>
+      <div class="chart-controls">
+        <button id="previous" type="button" class="soft" aria-label="Poprzedni okres">‹</button>
+        <select id="chart-range" aria-label="Zakres"><option value="7">Tydzień</option><option value="28">4 tygodnie</option></select>
+        <button id="next" type="button" class="soft" aria-label="Następny okres">›</button>
+      </div>
+      <div id="chart-body"></div>
+    </section>
+    <section id="add" class="panel" hidden>
+      <h2>Nowe zadanie</h2>
+      <form id="add-form">
+        <label>Nazwa <input name="title" type="text" maxlength="200" required></label>
+        <label>Planowany czas <input name="duration" placeholder="45 · 1h30 · 1:30" maxlength="24" required></label>
+        <label>Kategoria <select name="cat"></select></label>
+        <div class="form-actions">
+          <button class="soft" type="submit" value="add">Dodaj</button>
+          <button class="soft" type="submit" value="start">Dodaj i start</button>
+        </div>
+      </form>
+    </section>
+    <nav id="tabs" aria-label="Widoki" hidden>
+      <button type="button" data-page="focus" aria-current="page">Zegar</button>
+      <button type="button" data-page="tasks">Zadania</button>
+      <button type="button" data-page="history">Historia</button>
+      <button type="button" data-page="chart">Wykres</button>
+      <button type="button" data-page="add">+ Nowe</button>
+    </nav>
+  </main>
+  <dialog id="dialog">
+    <form id="dialog-form">
+      <h2 id="dialog-title"></h2>
+      <div id="dialog-fields"></div>
+      <p id="dialog-error" class="notice" role="alert" hidden></p>
+      <div class="form-actions">
+        <button class="soft" type="button" id="cancel">Anuluj</button>
+        <button class="soft" type="submit" id="save">Zapisz</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>
