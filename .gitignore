@@ -7,3 +7,5 @@ import-*/
 backup-*/
 __pycache__/
 *.pyc
+cloud.json
+cloud_state.json

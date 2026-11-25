@@ -27,6 +27,7 @@ from tkinter import colorchooser, messagebox, simpledialog
 
 from PIL import Image, ImageDraw, ImageFilter, ImageOps, ImageTk
 
+from cloud_sync import CloudSync
 from widget_web import WebError, WidgetWeb
 
 HERE = Path(__file__).resolve().parent
@@ -511,6 +512,8 @@ class App:
         self.skin = SKINS[self.skin_id]
         self.web = None
         self.modal_depth = 0
+        self.cloud = None if DEMO else CloudSync(
+            HERE, {"store": STORE, "history": HISTORY, "cats": CATS, "timelog": TIMELOG}, CONFIG)
         self.store = load_json(STORE, {"tasks": [], "current": None})
         self.cats = load_categories()
         self.add_cat = None
@@ -628,6 +631,8 @@ class App:
     # --- dane ---
     def save(self):
         save_json(STORE, self.store)
+        if self.cloud:
+            self.cloud.poke(force=True)
 
     def cur(self):
         tasks = self.store["tasks"]
@@ -1158,7 +1163,28 @@ class App:
         menu.add_command(label="Połącz telefon przez Wi-Fi…", command=lambda: self.open_web(True))
         if self.web:
             menu.add_command(label="Wyłącz dostęp z przeglądarki", command=self.close_web)
+        if self.cloud:
+            menu.add_separator()
+            menu.add_command(label=self.cloud.status(), state="disabled")
+            if self.cloud.connected:
+                menu.add_command(label="Wyślij do chmury teraz", command=lambda: self.cloud.poke(force=True))
+                menu.add_command(label="Odłącz od chmury", command=self.cloud_off)
+            else:
+                menu.add_command(label="Połącz z chmurą (konto apki)…", command=self.cloud_on)
         self.popup(menu, event)
+
+    def cloud_on(self):
+        email = self.modal(simpledialog.askstring, "Chmura", "E-mail konta w apce Life:")
+        if not email or not email.strip():
+            return
+        password = self.modal(simpledialog.askstring, "Chmura", "Hasło (nie jest zapisywane):", show="*")
+        if not password:
+            return
+        self._bg(lambda: self.cloud.sign_in(email, password), "Połączono z chmurą")
+
+    def cloud_off(self):
+        self.cloud.sign_out()
+        self.toast("Odłączono od chmury")
 
     def set_skin(self, name):
         self.cfg["skin"] = name
@@ -1745,6 +1771,8 @@ class App:
                 self.draw()
             elif self.view == "list" or (self.view == "month" and int(now().timestamp()) % 30 == 0):
                 self.draw()
+        if self.cloud:
+            self.cloud.poke()
         if now().timestamp() - self.last_seen_saved >= 30:
             self.last_seen_saved = now().timestamp()
             self.cfg["last_seen"] = now().isoformat()
