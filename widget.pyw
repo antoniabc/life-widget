@@ -1170,10 +1170,15 @@ class App:
                 menu.add_command(label="Wyślij do chmury teraz", command=lambda: self.cloud.poke(force=True))
                 menu.add_command(label="Odłącz od chmury", command=self.cloud_off)
             else:
-                menu.add_command(label="Połącz z chmurą (kod z apki)…", command=self.cloud_on)
+                menu.add_command(label="Zaloguj przez Google…", command=self.cloud_on)
+                menu.add_command(label="Połącz kodem z apki…", command=self.cloud_code)
         self.popup(menu, event)
 
     def cloud_on(self):
+        self.toast("Otwieram przeglądarkę…")
+        self._bg(lambda: self.cloud.google_sign_in(CREDS), "Połączono z chmurą")
+
+    def cloud_code(self):
         code = self.modal(simpledialog.askstring, "Chmura",
                           "Wklej kod z apki (Ustawienia → Widżet na PC → Kopiuj kod połączenia):")
         if not code or not code.strip():

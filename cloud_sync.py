@@ -5,15 +5,20 @@ Ten moduł co kilka sekund porównuje je z tym, co już wysłano, i wysyła tylk
 (pole runStart), przerwy, zaliczenia, kategorie i zmiany nazw trafiają do apki bez dodatkowych kroków.
 Kierunek: widget -> chmura (apka -> widget nie jest obsługiwany).
 
-Logowanie: w apce (zalogowanej przez Google) Ustawienia -> Widżet na PC -> Kopiuj kod, potem wklej go w widgecie.
-Zapisuje się tylko token odświeżania (cloud.json, poza gitem). Tylko biblioteka standardowa.
+Logowanie: przez Google wprost z widgetu (przeglądarka + lokalny adres zwrotny), albo kodem z apki
+(Ustawienia -> Widżet na PC). Zapisuje się tylko token odświeżania (cloud.json, poza gitem).
+Tylko biblioteka standardowa.
 """
 import base64
 import datetime as dt
 import hashlib
+import http.server
 import json
+import secrets
 import threading
 import time
+import urllib.parse
+import webbrowser
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -212,6 +217,69 @@ class CloudSync:
             raise CloudError(msg) from None
         except (urllib.error.URLError, OSError) as e:
             raise CloudError("brak połączenia") from e
+
+    def google_sign_in(self, creds_path, timeout=180):
+        """Logowanie Google bez hasła: przeglądarka -> kod na 127.0.0.1 -> token Google -> logowanie Firebase.
+        Używa klienta OAuth typu „aplikacja na komputer” z credentials.json. Rzuca CloudError."""
+        cfg = read_json(creds_path, {})
+        c = cfg.get("installed") or cfg.get("web") or {}
+        if not c.get("client_id"):
+            raise CloudError("brak credentials.json (klient OAuth typu Desktop)")
+        got = {}
+
+        class Handler(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                if "code" in q or "error" in q:
+                    got.update({k: v[0] for k, v in q.items()})
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.end_headers()
+                self.wfile.write("<meta charset=utf-8><body style='font-family:Georgia;text-align:center;margin-top:20vh'>"
+                                 "<h2>Gotowe</h2><p>Możesz zamknąć tę kartę i wrócić do widgetu.</p>".encode())
+
+            def log_message(self, *a):
+                pass
+
+        srv = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+        srv.timeout = 1
+        redirect = f"http://127.0.0.1:{srv.server_port}"
+        state = secrets.token_urlsafe(16)
+        verifier = secrets.token_urlsafe(48)
+        challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+        url = c.get("auth_uri", "https://accounts.google.com/o/oauth2/auth") + "?" + urllib.parse.urlencode({
+            "client_id": c["client_id"], "redirect_uri": redirect, "response_type": "code", "state": state,
+            "scope": "openid email profile", "code_challenge": challenge, "code_challenge_method": "S256",
+            "prompt": "select_account"})
+        try:
+            webbrowser.open(url)
+            end = time.time() + timeout
+            while not got and time.time() < end:
+                srv.handle_request()
+        finally:
+            srv.server_close()
+        if not got:
+            raise CloudError("nie dokończono logowania w przeglądarce")
+        if got.get("error") or got.get("state") != state:
+            raise CloudError("Google odrzucił logowanie: " + got.get("error", "zły stan"))
+        tok = self._post(c.get("token_uri", "https://oauth2.googleapis.com/token"), urllib.parse.urlencode({
+            "code": got["code"], "client_id": c["client_id"], "client_secret": c.get("client_secret", ""),
+            "redirect_uri": redirect, "grant_type": "authorization_code", "code_verifier": verifier}), form=True)
+        try:
+            r = self._post(f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithIdp?key={API_KEY}", {
+                "postBody": "id_token=" + tok["id_token"] + "&providerId=google.com",
+                "requestUri": "http://localhost", "returnSecureToken": True, "returnIdpCredential": True})
+        except CloudError as e:
+            raise CloudError(f"{e}. Dodaj klienta {c['client_id'][:12]}… do dozwolonych w Firebase: "
+                             "Authentication > Sign-in method > Google") from None
+        midnight = dt.datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
+        self.auth = {"email": r.get("email", ""), "uid": r["localId"], "refresh_token": r["refreshToken"],
+                     "since": midnight.isoformat()}
+        self.id_token, self.id_exp = r["idToken"], time.time() + int(r.get("expiresIn", 3600)) - 60
+        self.state = {"hashes": {}, "open": []}
+        self.error = None
+        self._save()
+        self.poke(force=True)
 
     def connect(self, code):
         """Łączy konto kodem z apki (Ustawienia -> Widżet na PC). Rzuca CloudError."""
