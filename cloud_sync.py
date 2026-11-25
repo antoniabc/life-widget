@@ -5,9 +5,10 @@ Ten moduł co kilka sekund porównuje je z tym, co już wysłano, i wysyła tylk
 (pole runStart), przerwy, zaliczenia, kategorie i zmiany nazw trafiają do apki bez dodatkowych kroków.
 Kierunek: widget -> chmura (apka -> widget nie jest obsługiwany).
 
-Logowanie: e-mail + hasło konta apki wpisujesz raz w oknie widgetu; zapisuje się tylko token odświeżania
-(cloud.json, poza gitem), hasła się nie przechowuje. Tylko biblioteka standardowa.
+Logowanie: w apce (zalogowanej przez Google) Ustawienia -> Widżet na PC -> Kopiuj kod, potem wklej go w widgecie.
+Zapisuje się tylko token odświeżania (cloud.json, poza gitem). Tylko biblioteka standardowa.
 """
+import base64
 import datetime as dt
 import hashlib
 import json
@@ -212,14 +213,22 @@ class CloudSync:
         except (urllib.error.URLError, OSError) as e:
             raise CloudError("brak połączenia") from e
 
-    def sign_in(self, email, password):
-        """Jednorazowe logowanie; zapisuje tylko token odświeżania. Rzuca CloudError."""
-        r = self._post(f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={API_KEY}",
-                       {"email": email.strip(), "password": password, "returnSecureToken": True})
+    def connect(self, code):
+        """Łączy konto kodem z apki (Ustawienia -> Widżet na PC). Rzuca CloudError."""
+        try:
+            info = json.loads(base64.b64decode(code.strip()).decode())
+            uid, refresh = info["uid"], info["refreshToken"]
+        except Exception:
+            raise CloudError("zły kod, skopiuj go ponownie z apki") from None
         midnight = dt.datetime.now().astimezone().replace(hour=0, minute=0, second=0, microsecond=0)
-        self.auth = {"email": email.strip(), "uid": r["localId"], "refresh_token": r["refreshToken"],
+        self.auth = {"email": info.get("email", ""), "uid": uid, "refresh_token": refresh,
                      "since": midnight.isoformat()}
-        self.id_token, self.id_exp = r["idToken"], time.time() + int(r.get("expiresIn", 3600)) - 60
+        self.id_token = None
+        try:
+            self._token()                      # sprawdza, że token działa
+        except CloudError:
+            self.auth = {}
+            raise
         self.state = {"hashes": {}, "open": []}
         self.error = None
         self._save()

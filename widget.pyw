@@ -1170,17 +1170,15 @@ class App:
                 menu.add_command(label="Wyślij do chmury teraz", command=lambda: self.cloud.poke(force=True))
                 menu.add_command(label="Odłącz od chmury", command=self.cloud_off)
             else:
-                menu.add_command(label="Połącz z chmurą (konto apki)…", command=self.cloud_on)
+                menu.add_command(label="Połącz z chmurą (kod z apki)…", command=self.cloud_on)
         self.popup(menu, event)
 
     def cloud_on(self):
-        email = self.modal(simpledialog.askstring, "Chmura", "E-mail konta w apce Life:")
-        if not email or not email.strip():
+        code = self.modal(simpledialog.askstring, "Chmura",
+                          "Wklej kod z apki (Ustawienia → Widżet na PC → Kopiuj kod połączenia):")
+        if not code or not code.strip():
             return
-        password = self.modal(simpledialog.askstring, "Chmura", "Hasło (nie jest zapisywane):", show="*")
-        if not password:
-            return
-        self._bg(lambda: self.cloud.sign_in(email, password), "Połączono z chmurą")
+        self._bg(lambda: self.cloud.connect(code), "Połączono z chmurą")
 
     def cloud_off(self):
         self.cloud.sign_out()
